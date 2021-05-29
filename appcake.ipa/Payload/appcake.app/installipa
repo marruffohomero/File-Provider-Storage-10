@@ -1,0 +1,54 @@
+#!/bin/sh
+
+  IPA="$1"
+  SANDBOX=""
+  set `uuid -v4 -1 | tr "[:lower:]" "[:upper:]"`
+  SANDBOX="/private/var/mobile/Applications/$1"
+  unzip -q "$IPA" -d "$SANDBOX"
+  cd "$SANDBOX"
+  mv "$SANDBOX/Payload/`ls "Payload"`" "$PWD"
+  rmdir "Payload"
+  APP="`ls -d */`"
+  mkdir "Library"
+  mkdir "Documents"
+  mkdir "tmp"
+  chown -R mobile:mobile "$SANDBOX"
+  chown -R mobile:wheel "$APP"
+  chown mobile:wheel "$SANDBOX"/*
+  chmod -R 775 "$SANDBOX"/*
+  rm "$IPA"
+  cd "$APP"
+  CFBUNDLEEXECUTABLE="`grep 'CFBundleExecutable' -A 1 "Info.plist" | grep -G -o '<string>.*</string>' | sed 's/<.\{1,2\}tring>//g'`"
+  CFBUNDLEIDENTIFIER="`grep 'CFBundleIdentifier' -A 1 "Info.plist" | grep -G -o '<string>.*</string>' | sed 's/<.\{1,2\}tring>//g'`"
+  CFBUNDLENAME="`grep 'CFBundleName' -A 1 "Info.plist" | grep -G -o '<string>.*</string>' | sed 's/<.\{1,2\}tring>//g'`"
+  cp -p "$CFBUNDLEEXECUTABLE" "$CFBUNDLEEXECUTABLE.bak"
+  od -A n -N 4096 -t x1 --w=4096 "$CFBUNDLEEXECUTABLE" | sed 's/ //g' | sed 's/2f7573722f6c69622f64796c64.*/2f7573722f6c69622f64796c64/g' > "$CFBUNDLEEXECUTABLE.hex"
+  set `stat -c%s "$CFBUNDLEEXECUTABLE.hex"`
+  set `expr $(($1 + 253)) / 2`
+  rm "$CFBUNDLEEXECUTABLE.hex"
+  printf "\x0" | dd bs=1 conv=notrunc of="$CFBUNDLEEXECUTABLE.bak" seek=$1
+  rm "$CFBUNDLEEXECUTABLE.bak"
+  
+  OLDPATH=`/Applications/AppCake.app/updatehelper -f Info.plist|grep .`
+  if [ "$OLDPATH" != "" ]
+  then
+	echo "Found old install. Will perform upgrade ..."
+	echo "Removing the old install entry from SpringBoard ..."
+	/Applications/AppCake.app/updatehelper -r Info.plist
+	echo "Copying Library to the new install folder ..."
+	cp -R "$OLDPATH/Library/" "$SANDBOX/"
+	echo "Copying Documents to the new install folder ..."
+	cp -R "$OLDPATH/Documents/" "$SANDBOX/"
+	echo "Copying tmp to the new install folder ..."
+	cp -R "$OLDPATH/tmp/" "$SANDBOX/"
+	echo "Removing the old install folder ..."
+	rm -R "$OLDPATH"
+	chown -R mobile:mobile "$SANDBOX"
+	chown -R mobile:wheel "$APP"
+	chown mobile:wheel "$SANDBOX"/*
+	chmod -R 775 "$SANDBOX"/*
+  fi;
+  
+ /Applications/AppCake.app/uicache
+ chown mobile:mobile /private/var/mobile/Library/Caches/com.apple.mobile.installation.plist
+exit
